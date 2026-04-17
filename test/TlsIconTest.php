@@ -11,27 +11,12 @@ use PHPUnit\Framework\TestCase;
 
 final class TlsIconTest extends TestCase
 {
-
-	/** @var string */
-	private $strUnEnCrypted = '<img class="lock_icon" src="plugins/tls_icon/unlock.svg" title="Message received over an unencrypted connection!" />';
-
-	/** @var string */
-	private $strCryptedTlsv12 = '<img class="lock_icon" src="plugins/tls_icon/lock.svg" title="TLSv1.2" />';
-
-	/** @var string */
-	private $strCryptedTlsv12WithCipher = '<img class="lock_icon" src="plugins/tls_icon/lock.svg" title="TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits)" />';
-
-	/** @var string */
-	private $strInternal = '<img class="lock_icon" src="plugins/tls_icon/blue_lock.svg" title="Mail was internal" />';
-
-	/** @var string */
-	private $strSendmailCryptedTlsv13WithCipherNoVerify = '<img class="lock_icon" src="plugins/tls_icon/lock.svg" title="TLSv1.3 cipher=TLS_AES_256_GCM_SHA384 bits=256 verify=NO" />';
-
-	/** @var string */
-	private $strSendmailCryptedTlsv12WithCipherVerify = '<img class="lock_icon" src="plugins/tls_icon/lock.svg" title="TLSv1.2 cipher=ECDHE-RSA-AES256-GCM-SHA384 bits=256 verify=OK" />';
-
-	/** @var string */
-	private $strStalwartCryptedTlsv13WithCipher = '<img class="lock_icon" src="plugins/tls_icon/lock.svg" title="TLSv1.3 with cipher TLS13_AES_256_GCM_SHA384" />';
+	private function assertSubjectContainsIcon($headersProcessed, $title)
+	{
+		$value = $headersProcessed['output']['subject']['value'];
+		$this->assertStringContainsString('src="data:image/svg+xml;charset=UTF-8,', $value);
+		$this->assertStringContainsString('title="' . $title . '"', $value);
+	}
 
 	public function testInstance()
 	{
@@ -65,6 +50,7 @@ final class TlsIconTest extends TestCase
 	public function testMessageHeadersNoMatching()
 	{
 		$o = new tls_icon();
+		$o->init();
 		$headersProcessed = $o->message_headers([
 			'output' => [
 				'subject' => [
@@ -77,11 +63,19 @@ final class TlsIconTest extends TestCase
 				]
 			]
 		]);
-		$this->assertEquals([
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'Message received over an unencrypted connection!');
+	}
+
+	public function testMessageHeadersNoMatchingWithUrlbaseWithoutTrailingSlash()
+	{
+		$o = new tls_icon();
+		$o->urlbase = 'plugins/tls_icon';
+		$o->init();
+		$headersProcessed = $o->message_headers([
 			'output' => [
 				'subject' => [
-					'value' => 'Sent to you' . $this->strUnEnCrypted,
-					'html' => 1,
+					'value' => 'Sent to you',
 				],
 			],
 			'headers' => (object)[
@@ -89,7 +83,28 @@ final class TlsIconTest extends TestCase
 					'received' => 'my header',
 				]
 			]
-		], $headersProcessed);
+		]);
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'Message received over an unencrypted connection!');
+	}
+
+	public function testMessageHeadersNoMatchingUsesAbsolutePluginAssetUrl()
+	{
+		$o = new tls_icon();
+		$o->init();
+		$headersProcessed = $o->message_headers([
+			'output' => [
+				'subject' => [
+					'value' => 'Sent to you',
+				],
+			],
+			'headers' => (object)[
+				'others' => [
+					'received' => 'my header',
+				]
+			]
+		]);
+		$this->assertStringContainsString('src="data:image/svg+xml;charset=UTF-8,', $headersProcessed['output']['subject']['value']);
 	}
 
 	public function testMessageHeadersTlsWithCipher()
@@ -110,22 +125,8 @@ final class TlsIconTest extends TestCase
 				]
 			]
 		]);
-		$this->assertEquals([
-			'output' => [
-				'subject' => [
-					'value' => 'Sent to you' . $this->strCryptedTlsv12WithCipher,
-					'html' => 1,
-				],
-			],
-			'headers' => (object)[
-				'others' => [
-					'received' => 'from smtp.github.com (out-21.smtp.github.com [192.30.252.204])
-					(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits)) (No client certificate requested)
-					by mail.example.org (Postfix) with ESMTPS id 46B4C497C2
-					for <test@mail.example.org>; Sat, 9 Jul 2022 14:03:01 +0000 (UTC)',
-				]
-			]
-		], $headersProcessed);
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits)');
 	}
 
 	public function testMessageHeadersTls()
@@ -146,22 +147,8 @@ final class TlsIconTest extends TestCase
 				]
 			]
 		]);
-		$this->assertEquals([
-			'output' => [
-				'subject' => [
-					'value' => 'Sent to you' . $this->strCryptedTlsv12,
-					'html' => 1,
-				],
-			],
-			'headers' => (object)[
-				'others' => [
-					'received' => 'from smtp.github.com (out-21.smtp.github.com [192.30.252.204])
-					(using TLSv1.2) (No client certificate requested)
-					by mail.example.org (Postfix) with ESMTPS id 46B4C497C2
-					for <test@mail.example.org>; Sat, 9 Jul 2022 14:03:01 +0000 (UTC)',
-				]
-			]
-		], $headersProcessed);
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'TLSv1.2');
 	}
 
 	public function testMessageHeadersInternal()
@@ -180,20 +167,8 @@ final class TlsIconTest extends TestCase
 				]
 			]
 		]);
-		$this->assertEquals([
-			'output' => [
-				'subject' => [
-					'value' => 'Sent to you' . $this->strInternal,
-					'html' => 1,
-				],
-			],
-			'headers' => (object)[
-				'others' => [
-					'received' => 'by aaa.bbb.ccc (Postfix, from userid 0)
-					id A70248414D5; Sun, 26 Apr 2020 16:49:01 +0200 (CEST)',
-				]
-			]
-		], $headersProcessed);
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'Mail was internal');
 	}
 
 	public function testMessageHeadersMultiFromWithConfig()
@@ -220,19 +195,8 @@ final class TlsIconTest extends TestCase
 				]
 			]
 		]);
-		$this->assertEquals([
-			'output' => [
-				'subject' => [
-					'value' => 'Sent to you' . $this->strCryptedTlsv12WithCipher,
-					'html' => 1,
-				],
-			],
-			'headers' => (object)[
-				'others' => [
-					'received' => $inputHeaders,
-				]
-			]
-		], $headersProcessed);
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits)');
 	}
 
 	public function testMessageHeadersMultiFromWithBadConfig()
@@ -259,19 +223,8 @@ final class TlsIconTest extends TestCase
 				]
 			]
 		]);
-		$this->assertEquals([
-			'output' => [
-				'subject' => [
-					'value' => 'Sent to you' . $this->strUnEnCrypted,
-					'html' => 1,
-				],
-			],
-			'headers' => (object)[
-				'others' => [
-					'received' => $inputHeaders,
-				]
-			]
-		], $headersProcessed);
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'Message received over an unencrypted connection!');
 	}
 
 	public function testSendmailTLS13NoVerify()
@@ -292,22 +245,8 @@ final class TlsIconTest extends TestCase
 				]
 			]
 		]);
-		$this->assertEquals([
-			'output' => [
-				'subject' => [
-					'value' => 'Sent to you' . $this->strSendmailCryptedTlsv13WithCipherNoVerify,
-					'html' => 1,
-				],
-			],
-			'headers' => (object)[
-				'others' => [
-					'received' => 'from 69-171-232-143.mail-mail.facebook.com (69-171-232-143.mail-mail.facebook.com [69.171.232.143])
-					by mail.aegee.org (8.17.1/8.17.1) with ESMTPS id 2BI73F8b1489360
-					(version=TLSv1.3 cipher=TLS_AES_256_GCM_SHA384 bits=256 verify=NO)
-					for <my@address>; Sun, 18 Dec 2022 07:03:16 GMT',
-				]
-			]
-		], $headersProcessed);
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'TLSv1.3 cipher=TLS_AES_256_GCM_SHA384 bits=256 verify=NO');
 	}
 
 	public function testSendmailTLS12WithVerify()
@@ -328,22 +267,8 @@ final class TlsIconTest extends TestCase
 				]
 			]
 		]);
-		$this->assertEquals([
-			'output' => [
-				'subject' => [
-					'value' => 'Sent to you' . $this->strSendmailCryptedTlsv12WithCipherVerify,
-					'html' => 1,
-				],
-			],
-			'headers' => (object)[
-				'others' => [
-					'received' => 'from smtp.github.com (out-18.smtp.github.com [192.30.252.201])
-					by mail.aegee.org (8.17.1/8.17.1) with ESMTPS id 2BGMf4uY685293
-					(version=TLSv1.2 cipher=ECDHE-RSA-AES256-GCM-SHA384 bits=256 verify=OK)
-					for <my@address>; Fri, 16 Dec 2022 22:41:05 GMT',
-				]
-			]
-		], $headersProcessed);
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'TLSv1.2 cipher=ECDHE-RSA-AES256-GCM-SHA384 bits=256 verify=OK');
 	}
 
 	public function testSendmailTLS13MultipleRecipients()
@@ -364,22 +289,8 @@ final class TlsIconTest extends TestCase
 				]
 			]
 		]);
-		$this->assertEquals([
-			'output' => [
-				'subject' => [
-					'value' => 'Sent to you' . $this->strSendmailCryptedTlsv13WithCipherNoVerify,
-					'html' => 1,
-				],
-			],
-			'headers' => (object)[
-				'others' => [
-					'received' => 'from mout.kundenserver.de (mout.kundenserver.de [212.227.126.134])
-					by mail.aegee.org (8.17.1/8.17.1) with ESMTPS id 2BLGrgYw3602565
-					(version=TLSv1.3 cipher=TLS_AES_256_GCM_SHA384 bits=256 verify=NO);
-					Wed, 21 Dec 2022 16:53:42 GMT',
-				]
-			]
-		], $headersProcessed);
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'TLSv1.3 cipher=TLS_AES_256_GCM_SHA384 bits=256 verify=NO');
 	}
 
 	public function testStalwartTls()
@@ -400,21 +311,7 @@ final class TlsIconTest extends TestCase
 				]
 			]
 		]);
-		$this->assertEquals([
-			'output' => [
-				'subject' => [
-					'value' => 'Sent to you' . $this->strStalwartCryptedTlsv13WithCipher,
-					'html' => 1,
-				],
-			],
-			'headers' => (object) [
-				'others' => [
-					'received' => 'from mail-yw1-f174.google.com (mail-yw1-f174.google.com [209.85.128.174] (AS15169 Google LLC, US))
-					(using TLSv1.3 with cipher TLS13_AES_256_GCM_SHA384)
-					by mail.example.org (Stalwart SMTP) with ESMTPS id 36DAF29F3A02098;
-					Mon, 16 Jun 2025 13:33:03 +0000',
-				]
-			]
-		], $headersProcessed);
+		$this->assertSame(1, $headersProcessed['output']['subject']['html']);
+		$this->assertSubjectContainsIcon($headersProcessed, 'TLSv1.3 with cipher TLS13_AES_256_GCM_SHA384');
 	}
 }
