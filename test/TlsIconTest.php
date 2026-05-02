@@ -18,6 +18,9 @@ final class TlsIconTest extends TestCase
 		$this->assertStringContainsString('title="' . $title . '"', $value);
 	}
 
+	/** @var string */
+	private $strNewPostfixTLSv13 = '<img class="lock_icon" src="plugins/tls_icon/lock.svg" title="TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange ECDHE (secp384r1) server-signature RSA-PSS (4096 bits) server-digest SHA256" />';
+
 	public function testInstance()
 	{
 		$o = new tls_icon();
@@ -171,6 +174,108 @@ final class TlsIconTest extends TestCase
 		$this->assertSubjectContainsIcon($headersProcessed, 'Mail was internal');
 	}
 
+
+	public function testMessageHeadersInternalLocalhostIPv4()
+	{
+		$o = new tls_icon();
+		$headersProcessed = $o->message_headers([
+			'output' => [
+				'subject' => [
+					'value' => 'Sent to you',
+				],
+			],
+			'headers' => (object)[
+				'others' => [
+					'received' => 'from mail.whitequark.org (localhost [127.0.0.1])
+				by mail.whitequark.org (Postfix) with ESMTP id CDCA2E08B7',
+				]
+			]
+		]);
+		$this->assertEquals([
+			'output' => [
+				'subject' => [
+					'value' => 'Sent to you' . $this->strInternal,
+					'html' => 1,
+				],
+			],
+			'headers' => (object)[
+				'others' => [
+					'received' => 'from mail.whitequark.org (localhost [127.0.0.1])
+				by mail.whitequark.org (Postfix) with ESMTP id CDCA2E08B7',
+				]
+			]
+		], $headersProcessed);
+	}
+
+	public function testMessageHeadersInternalLocalhostIPv6()
+	{
+		$o = new tls_icon();
+		$headersProcessed = $o->message_headers([
+			'output' => [
+				'subject' => [
+					'value' => 'Sent to you',
+				],
+			],
+			'headers' => (object)[
+				'others' => [
+					'received' => 'from mail.whitequark.org (localhost [IPv6:::1])
+				by mail.whitequark.org (Postfix) with ESMTP id CDCA2E08B7',
+				]
+			]
+		]);
+		$this->assertEquals([
+			'output' => [
+				'subject' => [
+					'value' => 'Sent to you' . $this->strInternal,
+					'html' => 1,
+				],
+			],
+			'headers' => (object)[
+				'others' => [
+					'received' => 'from mail.whitequark.org (localhost [IPv6:::1])
+				by mail.whitequark.org (Postfix) with ESMTP id CDCA2E08B7',
+				]
+			]
+		], $headersProcessed);
+	}
+
+	public function testPostfixTLS13NewSyntax()
+	{
+		$header = 'from GVXPR05CU001.outbound.protection.outlook.com (mail-swedencentralazon11023139.outbound.protection.outlook.com [52.101.83.139])
+    (using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits) key-exchange ECDHE (secp384r1) server-signature RSA-PSS (4096 bits) server-digest SHA256)
+    (No client certificate requested)
+    by example.com with ESMTPS id EXAMPLE
+    for <test@example.com>; Tue, 16 Sep 2025 12:26:17 +0200 (CEST)';
+
+		$o = new tls_icon();
+		$headersProcessed = $o->message_headers([
+			'output' => [
+				'subject' => [
+					'value' => 'Sent to you',
+				],
+			],
+			'headers' => (object)[
+				'others' => [
+					'received' => $header,
+				]
+			]
+		]);
+		$this->assertEquals([
+			'output' => [
+				'subject' => [
+					'value' => 'Sent to you' . $this->strNewPostfixTLSv13,
+					'html' => 1,
+				],
+			],
+			'headers' => (object)[
+				'others' => [
+					'received' => $header,
+				]
+			]
+		], $headersProcessed);
+	}
+
+
 	public function testMessageHeadersMultiFromWithConfig()
 	{
 		$inputHeaders = [
@@ -203,7 +308,7 @@ final class TlsIconTest extends TestCase
 	{
 		$inputHeaders = [
 			'from mail.example.org by mail.example.org with LMTP id pLzoBVClyGIiVgAA3BZZyA (envelope-from <bounces@bounces.example.org>) for <test@example.org>; Fri, 08 Jul 2022 21:44:48 +0000',
-			'from localhost (localhost [127.0.0.1]) by mail.example.org (Postfix) with ESMTP id 0D33249414 for <test@example.org>; Fri,  8 Jul 2022 21:44:48 +0000 (UTC)',
+			'from internalhost (internalhost [192.168.0.1]) by mail.example.org (Postfix) with ESMTP id 0D33249414 for <test@example.org>; Fri,  8 Jul 2022 21:44:48 +0000 (UTC)',
 			'from xxxx-ord.mtasv.net (xxxx-ord.mtasv.net [255.255.255.255]) (using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits)) (No client certificate requested) by mail.example.org (Postfix) with ESMTPS id 73C3B461AF for <test@example.fr>; Fri,  8 Jul 2022 21:44:39 +0000 (UTC)',
 			'by xxxx-ord.mtasv.net id hp2il427tk41 for <test@example.fr>; Fri, 8 Jul 2022 17:44:41 -0400 (envelope-from <bounces@bounces.example.org>)',
 		];
